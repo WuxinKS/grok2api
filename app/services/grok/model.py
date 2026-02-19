@@ -124,10 +124,10 @@ class ModelService:
         ),
         ModelInfo(
             model_id="grok-4.20-beta",
-            grok_model="grok-4-1-thinking-1129",
-            rate_limit_model="grok-4-1-thinking-1129",
-            model_mode="MODEL_MODE_GROK_4_1_THINKING",
-            cost=Cost.HIGH,
+            grok_model="grok-420",
+            rate_limit_model="grok-4",
+            model_mode="MODEL_MODE_GROK_420",
+            cost=Cost.LOW,
             display_name="Grok 4.20 Beta"
         ),
         ModelInfo(
