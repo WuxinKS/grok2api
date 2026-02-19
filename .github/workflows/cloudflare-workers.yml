@@ -55,6 +55,8 @@ jobs:
           import json
           import os
           import re
+          import time
+          import urllib.error
           import urllib.request
           
           token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
@@ -78,12 +80,41 @@ jobs:
           kv_base = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/storage/kv/namespaces"
           print(f"Ensuring KV namespace: {kv_title}", flush=True)
           
-          def request(method: str, url: str, data=None):
+          def request(method: str, url: str, data=None, max_retries: int = 5):
               headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
               body = None if data is None else json.dumps(data).encode("utf-8")
-              req = urllib.request.Request(url, data=body, headers=headers, method=method)
-              with urllib.request.urlopen(req) as resp:
-                  return json.loads(resp.read().decode("utf-8"))
+
+              last_err = None
+              for attempt in range(max_retries):
+                  try:
+                      req = urllib.request.Request(url, data=body, headers=headers, method=method)
+                      with urllib.request.urlopen(req, timeout=30) as resp:
+                          return json.loads(resp.read().decode("utf-8"))
+                  except urllib.error.HTTPError as e:
+                      if e.code >= 500 and attempt < max_retries - 1:
+                          wait = 2 ** attempt
+                          print(f"[retry] HTTP {e.code} {method} {url} (attempt {attempt+1}/{max_retries}), sleep {wait}s", flush=True)
+                          time.sleep(wait)
+                          last_err = e
+                          continue
+                      try:
+                          err_body = e.read().decode("utf-8", errors="ignore")
+                          print(f"[error] HTTP {e.code} body={err_body[:500]}", flush=True)
+                      except Exception:
+                          pass
+                      raise
+                  except urllib.error.URLError as e:
+                      if attempt < max_retries - 1:
+                          wait = 2 ** attempt
+                          print(f"[retry] URLError {method} {url} (attempt {attempt+1}/{max_retries}), sleep {wait}s: {e}", flush=True)
+                          time.sleep(wait)
+                          last_err = e
+                          continue
+                      raise
+
+              if last_err:
+                  raise last_err
+              raise RuntimeError("request failed with unknown error")
           
           # === Ensure KV namespace ===
           kv_id = None
